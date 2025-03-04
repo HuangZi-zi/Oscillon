@@ -116,8 +116,8 @@ class DrawingBoard:
         self.clear_canvas()
 
         # Step 1: Show overlay (transition animation)
-        self.overlay.deiconify()  # Show blank overlay
-        self.root.update()
+        # self.overlay.deiconify()  # Show blank overlay
+        # self.root.update()
 
         # Step 2: Minimize all "Drawing Board" windows
         drawing_windows = gw.getWindowsWithTitle("Drawing Board")
@@ -145,7 +145,7 @@ class DrawingBoard:
                 window.activate()  # Bring it to the front
 
             # Hide overlay after clicking
-            self.overlay.withdraw()
+            # self.overlay.withdraw()
 
         threading.Thread(target=perform_clicks, daemon=True).start()
 
