@@ -5,6 +5,10 @@ import pyautogui
 import time
 import threading
 import pygetwindow as gw
+from pywinauto import Application
+import win32gui
+import win32api
+import win32con
 
 class BackgroundClicker:
     """Handles background clicking and screen overlay."""
@@ -12,28 +16,63 @@ class BackgroundClicker:
     def __init__(self, root):
         self.root = root
 
-    def start_clicks(self, points):
-        """Runs multiple clicks in a sequence."""
-        thread = threading.Thread(target=self.perform_clicks, args=(points,))
+    def start_clicks(self, points, callback):
+        """Runs multiple clicks in a sequence and calls callback when done."""
+        thread = threading.Thread(target=self.perform_clicks, args=(points, callback))
         thread.start()
 
-    def perform_clicks(self, points):
-        """Performs multiple background clicks while keeping the screen clear."""
-        time.sleep(0.5)  # Short delay for stability
+    def perform_clicks(self, exe_name, points):
+        """Perform background clicks in a window without bringing it to the foreground."""
+        hWnd = get_window_handle_by_exe(exe_name)
 
-        pyautogui.hotkey('alt', 'tab')  # Switch to the next app
-        time.sleep(1)  # Give it time to load
+        if not hWnd:
+            print("Window not found!")
+            return
 
-        i = 0
-        for x, y in points:
-            pyautogui.moveTo(x, y, duration=0.5)  # Move cursor to location smoothly
-            pyautogui.click()
-            if i == 4:
-                time.sleep(3)  # Adjust delay as needed
+        print(f"Clicking in window: {exe_name} (Handle: {hWnd})")
+        for i, (x, y) in enumerate(points):
+            print(f"Clicking at: {x}, {y} in background")
+            window_click(hWnd, x, y)
+            if i ==4:
+                time.sleep(3)
             else:
                 time.sleep(0.5)
-            i += 1
 
+            print("All background clicks completed.")
+
+
+def get_window_handle_by_exe(exe_name):
+    """Find the window handle of an application using its EXE name."""
+    windows = gw.getWindowsWithTitle("")  # Get all open windows
+    for win in windows:
+        if exe_name.lower() in win.title.lower():  # Match by EXE name in window title
+            return win._hWnd  # Return the window handle (hWnd)
+    return None
+
+
+def window_click(hWnd, x, y):
+    """Send a background click event to a specific window at (x, y)."""
+    # win32gui.SetForegroundWindow(hWnd)
+    win32gui.ShowWindow(hWnd, win32con.SW_SHOWNOACTIVATE)  # Show without focus
+    # win32gui.ShowWindow(hWnd, win32con.SW_MAXIMIZE)
+    time.sleep(0.1)
+
+    # relative_x, relative_y = get_relative_coords(hWnd, x, y)
+
+    # Convert (x, y) to LPARAM format
+    # lParam = win32api.MAKELONG(relative_x, relative_y)
+    lParam = win32api.MAKELONG(x, y)
+
+    # Send mouse down and mouse up messages (click simulation)
+    # win32api.SetCursorPos([relative_x,relative_y])
+    win32api.SendMessage(hWnd, win32con.WM_ACTIVATE, win32con.WA_ACTIVE, 0)
+    win32api.SendMessage(hWnd, win32con.WM_LBUTTONDOWN, 0, lParam)
+    time.sleep(0.1)
+    win32api.SendMessage(hWnd, win32con.WM_LBUTTONUP, 0, lParam)
+
+def get_relative_coords(hWnd, x, y):
+    left, top, right, bottom = win32gui.GetWindowRect(hWnd)  # Get window position
+    return x - left, y - top  # Convert to relative coordinates
 
 class DrawingBoard:
     """Main drawing application."""
@@ -41,7 +80,7 @@ class DrawingBoard:
     def __init__(self, root):
         self.root = root
         self.root.title("Drawing Board")
-        self.root.attributes('-fullscreen', True)
+        # self.root.attributes('-fullscreen', True)
 
         screen_width = self.root.winfo_screenwidth()
         screen_height = self.root.winfo_screenheight()
@@ -69,10 +108,8 @@ class DrawingBoard:
 
         self.clicker = BackgroundClicker(self.root)  # Create BackgroundClicker instance
 
-        # **Fixed: Bind drawing events**
         self.canvas.bind("<B1-Motion>", self.draw)
         self.canvas.bind("<ButtonRelease-1>", self.reset)
-
         self.root.bind("<Escape>", self.exit_program)
 
         # Create a fullscreen overlay
@@ -105,49 +142,24 @@ class DrawingBoard:
         self.image = Image.new("RGB", (self.root.winfo_screenwidth(), self.root.winfo_screenheight() - 100), "white")
         self.draw_image = ImageDraw.Draw(self.image)
 
-    import threading
-    import pygetwindow as gw
-    import pyautogui
-    import time
-
     def save_canvas(self):
         """Saves the drawing, shows blank screen, performs clicks in the background, then restores."""
         self.image.save("aaaaaaaaaaa.png")
         self.clear_canvas()
 
-        # Step 1: Show overlay (transition animation)
-        self.overlay.deiconify()  # Show blank overlay
+        # Show uploading animation before hiding canvas
+        self.overlay.deiconify()
         self.root.update()
 
-        # Step 2: Minimize all "Drawing Board" windows
-        drawing_windows = gw.getWindowsWithTitle("Drawing Board")
-        for window in drawing_windows:
-            window.minimize()
-        time.sleep(1)  # Give time to minimize
-
         # Step 3: Click in the background (run in a separate thread)
-        def perform_clicks():
-            points = [(60, 60), (60, 105), (680, 480), (1190, 790), (100, 260), (1610, 920)]
-            i = 0
-            for x, y in points:
-                pyautogui.moveTo(x, y, duration=0.5)  # Move cursor to location smoothly
-                pyautogui.click()
-                if i == 4:
-                    time.sleep(3)  # Adjust delay as needed
-                else:
-                    time.sleep(0.5)
-                i += 1
+        points = [(60, 60), (60, 105), (680, 480), (1190, 790), (100, 260), (1610, 930)]
 
-            # Step 4: Restore all "Drawing Board" windows after clicking
-            for window in drawing_windows:
-                window.restore()
-                time.sleep(1)  # Wait for the app to restore
-                window.activate()  # Bring it to the front
+        # target_window = "hebiglol.exe"
+        # target_window = "Grbl"
+        target_window = "oscillon"
+        self.clicker.perform_clicks(target_window, points)
 
-            # Hide overlay after clicking
-            self.overlay.withdraw()
-
-        threading.Thread(target=perform_clicks, daemon=True).start()
+        self.overlay.withdraw()
 
     def exit_program(self, event):
         password = simpledialog.askstring("Exit", "Enter password to exit:", show='*')

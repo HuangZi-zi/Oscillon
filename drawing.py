@@ -2,6 +2,8 @@ import tkinter as tk
 from tkinter import simpledialog, messagebox
 from PIL import Image, ImageDraw
 
+from write import BackgroundClicker
+
 
 class DrawingBoard:
     def __init__(self, root):
@@ -58,7 +60,7 @@ class DrawingBoard:
         self.draw_image = ImageDraw.Draw(self.image)
 
     def save_canvas(self):
-        self.image.save("drawing.png")
+        self.image.save("aaaaaaaaaaa.png")
         self.clear_canvas()
 
     def exit_program(self, event):
@@ -72,4 +74,5 @@ class DrawingBoard:
 if __name__ == "__main__":
     root = tk.Tk()
     app = DrawingBoard(root)
+
     root.mainloop()
