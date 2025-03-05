@@ -6,33 +6,35 @@ import time
 import threading
 import pygetwindow as gw
 
-class BackgroundClicker:
-    """Handles background clicking and screen overlay."""
+from win32api import SetWindowLong,RGB
+from win32con import WS_EX_LAYERED,WS_EX_TRANSPARENT,GWL_EXSTYLE,LWA_ALPHA
+from win32gui import GetWindowLong,GetForegroundWindow,SetLayeredWindowAttributes
 
-    def __init__(self, root):
-        self.root = root
+import ctypes
 
-    def start_clicks(self, points):
-        """Runs multiple clicks in a sequence."""
-        thread = threading.Thread(target=self.perform_clicks, args=(points,))
-        thread.start()
 
-    def perform_clicks(self, points):
-        """Performs multiple background clicks while keeping the screen clear."""
-        time.sleep(0.5)  # Short delay for stability
+class ClickThrough:
+    Status = False
+    hWindow = None
+    is_working = False
+    wnd_hd_list = []
 
-        pyautogui.hotkey('alt', 'tab')  # Switch to the next app
-        time.sleep(1)  # Give it time to load
+    # set the window to be able to click through
+    def setThrouON(self):
+        # hWindow = GetForegroundWindow()
+        FindWindow = ctypes.windll.user32.FindWindowW
+        hwnd = FindWindow(None, "transition")
+        self.wnd_hd_list.append(hwnd)
+        exStyle = WS_EX_LAYERED | WS_EX_TRANSPARENT
+        SetWindowLong(hwnd, GWL_EXSTYLE, exStyle)
+        SetLayeredWindowAttributes(hwnd, RGB(0, 0, 0), 254, LWA_ALPHA)
 
-        i = 0
-        for x, y in points:
-            pyautogui.moveTo(x, y, duration=0.5)  # Move cursor to location smoothly
-            pyautogui.click()
-            if i == 4:
-                time.sleep(3)  # Adjust delay as needed
-            else:
-                time.sleep(0.5)
-            i += 1
+    # set the window to not be click through
+    def setThrouOFF(self):
+        # hWindow = GetForegroundWindow()
+        # SetWindowLong(hWindow, GWL_EXSTYLE,786704)
+        for hWindow in set(self.wnd_hd_list):
+            SetWindowLong(hWindow, GWL_EXSTYLE,256)
 
 
 class DrawingBoard:
@@ -67,7 +69,8 @@ class DrawingBoard:
         self.image = Image.new("RGB", (screen_width, screen_height - button_height), "white")
         self.draw_image = ImageDraw.Draw(self.image)
 
-        self.clicker = BackgroundClicker(self.root)  # Create BackgroundClicker instance
+        self.click_manage = ClickThrough()
+        # self.clicker = BackgroundClicker(self.root)  # Create BackgroundClicker instance
 
         # **Fixed: Bind drawing events**
         self.canvas.bind("<B1-Motion>", self.draw)
@@ -78,6 +81,8 @@ class DrawingBoard:
         # Create a fullscreen overlay
         self.overlay = tk.Toplevel(self.root)
         self.overlay.attributes('-fullscreen', True)
+        self.overlay.attributes('-topmost', 1)
+        self.overlay.title('transition')
         self.overlay.configure(bg="black")
         self.overlay.withdraw()  # Start hidden
 
@@ -116,13 +121,17 @@ class DrawingBoard:
         self.clear_canvas()
 
         # Step 1: Show overlay (transition animation)
-        # self.overlay.deiconify()  # Show blank overlay
-        # self.root.update()
+        self.overlay.deiconify()  # Show blank overlay
+        self.root.update()
 
         # Step 2: Minimize all "Drawing Board" windows
         drawing_windows = gw.getWindowsWithTitle("Drawing Board")
-        for window in drawing_windows:
-            window.minimize()
+        # drawing_windows[0].activate()  # Bring it to the front
+
+        drawing_windows[0].minimize()
+        self.click_manage.setThrouON()
+        # for window in drawing_windows:
+        #     window.minimize()
         time.sleep(1)  # Give time to minimize
 
         # Step 3: Click in the background (run in a separate thread)
@@ -145,13 +154,15 @@ class DrawingBoard:
                 window.activate()  # Bring it to the front
 
             # Hide overlay after clicking
-            # self.overlay.withdraw()
+            self.overlay.withdraw()
+            self.click_manage.setThrouOFF()
 
         threading.Thread(target=perform_clicks, daemon=True).start()
 
     def exit_program(self, event):
         password = simpledialog.askstring("Exit", "Enter password to exit:", show='*')
         if password == "secure123":
+            self.click_manage.setThrouOFF()
             self.root.destroy()
         else:
             messagebox.showerror("Error", "Incorrect password")
@@ -161,3 +172,4 @@ if __name__ == "__main__":
     root = tk.Tk()
     app = DrawingBoard(root)
     root.mainloop()
+    app.click_manage.setThrouOFF()
