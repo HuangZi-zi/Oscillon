@@ -61,7 +61,7 @@ class DrawingBoard:
         self.save_button.pack(side=tk.LEFT, padx=20, pady=20)
 
         self.canvas = tk.Canvas(self.root, bg="white", width=screen_width, height=screen_height - button_height)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.canvas.pack(fill=tk.BOTH, expand=False)
 
         self.old_x = None
         self.old_y = None
@@ -117,6 +117,7 @@ class DrawingBoard:
 
     def save_canvas(self):
         """Saves the drawing, shows blank screen, performs clicks in the background, then restores."""
+        self.image = self.image.resize((1440, 825))
         self.image.save("aaaaaaaaaaa.png")
         self.clear_canvas()
 
@@ -154,8 +155,8 @@ class DrawingBoard:
                 window.activate()  # Bring it to the front
 
             # Hide overlay after clicking
-            self.overlay.withdraw()
             self.click_manage.setThrouOFF()
+            self.overlay.withdraw()
 
         threading.Thread(target=perform_clicks, daemon=True).start()
 
