@@ -56,6 +56,10 @@ class DrawingBoard:
                                       height=2, width=10)
         self.clear_button.pack(side=tk.LEFT, padx=20, pady=20)
 
+        self.eraser_button = tk.Button(self.button_frame, text="Eraser", command=self.toggle_eraser, font=("Arial", 20),
+                                       height=2, width=10)
+        self.eraser_button.pack(side=tk.LEFT, padx=20, pady=20)
+
         self.save_button = tk.Button(self.button_frame, text="Save", command=self.save_canvas, font=("Arial", 20),
                                      height=2, width=10)
         self.save_button.pack(side=tk.LEFT, padx=20, pady=20)
@@ -65,18 +69,17 @@ class DrawingBoard:
 
         self.old_x = None
         self.old_y = None
+        self.eraser_active = False  # New variable to track eraser state
 
         self.image = Image.new("RGB", (screen_width, screen_height - button_height), "white")
         self.draw_image = ImageDraw.Draw(self.image)
 
-        self.click_manage = ClickThrough()
-        # self.clicker = BackgroundClicker(self.root)  # Create BackgroundClicker instance
-
-        # **Fixed: Bind drawing events**
         self.canvas.bind("<B1-Motion>", self.draw)
         self.canvas.bind("<ButtonRelease-1>", self.reset)
 
         self.root.bind("<Escape>", self.exit_program)
+
+        self.click_manage = ClickThrough()
 
         # Create a fullscreen overlay
         self.overlay = tk.Toplevel(self.root)
@@ -91,11 +94,15 @@ class DrawingBoard:
         self.loading_label.pack(expand=True)
 
     def draw(self, event):
-        """Handles drawing when the left mouse button is held down."""
+        """Handles drawing or erasing when the left mouse button is held down."""
         if event.y < self.canvas.winfo_height():  # Prevent drawing on button area
             if self.old_x and self.old_y:
-                self.canvas.create_line(self.old_x, self.old_y, event.x, event.y, fill="black", width=3)
-                self.draw_image.line([self.old_x, self.old_y, event.x, event.y], fill="black", width=3)
+                color = "white" if self.eraser_active else "black"  # Set color based on eraser state
+                width = 15 if self.eraser_active else 3  # Eraser should be wider
+
+                self.canvas.create_line(self.old_x, self.old_y, event.x, event.y, fill=color, width=width)
+                self.draw_image.line([self.old_x, self.old_y, event.x, event.y], fill=color, width=width)
+
             self.old_x = event.x
             self.old_y = event.y
 
@@ -110,10 +117,11 @@ class DrawingBoard:
         self.image = Image.new("RGB", (self.root.winfo_screenwidth(), self.root.winfo_screenheight() - 100), "white")
         self.draw_image = ImageDraw.Draw(self.image)
 
-    import threading
-    import pygetwindow as gw
-    import pyautogui
-    import time
+    def toggle_eraser(self):
+        """Toggles the eraser on and off."""
+        self.eraser_active = not self.eraser_active
+        button_text = "Pen" if self.eraser_active else "Eraser"
+        self.eraser_button.config(text=button_text)
 
     def save_canvas(self):
         """Saves the drawing, shows blank screen, performs clicks in the background, then restores."""
