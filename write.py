@@ -11,7 +11,7 @@ from win32con import WS_EX_LAYERED,WS_EX_TRANSPARENT,GWL_EXSTYLE,LWA_ALPHA
 from win32gui import GetWindowLong,GetForegroundWindow,SetLayeredWindowAttributes
 
 import ctypes
-
+import cv2
 
 class ClickThrough:
     Status = False
@@ -93,6 +93,15 @@ class DrawingBoard:
         self.loading_label = tk.Label(self.overlay, text="Uploading...", font=("Arial", 30), fg="white", bg="black")
         self.loading_label.pack(expand=True)
 
+        # Idle detection timer
+        self.last_activity_time = time.time()
+        self.idle_time_limit = 120  # 2 minutes
+        self.video_thread = None
+        self.running = True
+
+        # Start idle detection in a separate thread
+        threading.Thread(target=self.detect_idle, daemon=True).start()
+
     def draw(self, event):
         """Handles drawing or erasing when the left mouse button is held down."""
         if event.y < self.canvas.winfo_height():  # Prevent drawing on button area
@@ -105,23 +114,27 @@ class DrawingBoard:
 
             self.old_x = event.x
             self.old_y = event.y
+        self.reset_idle_timer()
 
     def reset(self, event):
         """Resets the drawing reference points after lifting the mouse button."""
         self.old_x = None
         self.old_y = None
+        self.reset_idle_timer()
 
     def clear_canvas(self):
         """Clears the drawing canvas."""
         self.canvas.delete("all")
         self.image = Image.new("RGB", (self.root.winfo_screenwidth(), self.root.winfo_screenheight() - 100), "white")
         self.draw_image = ImageDraw.Draw(self.image)
+        self.reset_idle_timer()
 
     def toggle_eraser(self):
         """Toggles the eraser on and off."""
         self.eraser_active = not self.eraser_active
         button_text = "Pen" if self.eraser_active else "Eraser"
         self.eraser_button.config(text=button_text)
+        self.reset_idle_timer()
 
     def save_canvas(self):
         """Saves the drawing, shows blank screen, performs clicks in the background, then restores."""
@@ -167,6 +180,47 @@ class DrawingBoard:
             self.overlay.withdraw()
 
         threading.Thread(target=perform_clicks, daemon=True).start()
+        self.reset_idle_timer()
+
+    def reset_idle_timer(self):
+        """Resets idle timer when user interacts."""
+        self.last_activity_time = time.time()
+
+    def detect_idle(self):
+        """Monitors user activity and plays video after 2 minutes of inactivity."""
+        while self.running:
+            time.sleep(5)
+            if time.time() - self.last_activity_time > self.idle_time_limit:
+                self.play_video()
+
+    def play_video(self):
+        """Plays the video in a fullscreen window and exits on mouse click."""
+        self.root.withdraw()  # Hide main window
+        cap = cv2.VideoCapture("oscilion.mp4")  # Change to your video file
+
+        cv2.namedWindow("Video", cv2.WND_PROP_FULLSCREEN)
+        cv2.setWindowProperty("Video", cv2.WND_PROP_FULLSCREEN, cv2.WINDOW_FULLSCREEN)
+
+        clicked = [False]  # Flag to track mouse click
+
+        def on_mouse(event, x, y, flags, param):
+            if event == cv2.EVENT_LBUTTONDOWN:
+                clicked[0] = True  # Mark clicked
+
+        cv2.setMouseCallback("Video", on_mouse)
+
+        while cap.isOpened():
+            ret, frame = cap.read()
+            if not ret or clicked[0]:  # Exit if video ends or user clicks
+                break
+
+            cv2.imshow("Video", frame)
+            cv2.waitKey(30)
+
+        cap.release()
+        cv2.destroyAllWindows()
+        self.root.deiconify()  # Show main window
+        self.reset_idle_timer()  # Reset timer after video
 
     def exit_program(self, event):
         password = simpledialog.askstring("Exit", "Enter password to exit:", show='*')
